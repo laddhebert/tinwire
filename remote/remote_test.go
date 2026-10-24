@@ -94,6 +94,9 @@ func TestUploadAndRemoveLocal(t *testing.T) {
 	if !strings.HasPrefix(remote, filepath.Join(home, "Library/Caches/tinwire/outbox")+"/") {
 		t.Fatalf("uploaded outside outbox: %s", remote)
 	}
+	if filepath.Base(remote) != "note's file.txt" {
+		t.Fatalf("original file name not kept (the recipient sees it): %s", filepath.Base(remote))
+	}
 	b, err := os.ReadFile(remote)
 	if err != nil || string(b) != "hello" {
 		t.Fatalf("content: %q %v", b, err)
@@ -106,6 +109,9 @@ func TestUploadAndRemoveLocal(t *testing.T) {
 	}
 	if _, err := os.Stat(remote); !os.IsNotExist(err) {
 		t.Fatal("upload not removed")
+	}
+	if _, err := os.Stat(filepath.Dir(remote)); !os.IsNotExist(err) {
+		t.Fatal("per-upload directory not removed")
 	}
 	if err := mac.RemoveUpload(context.Background(), "/etc/hosts"); err == nil {
 		t.Fatal("RemoveUpload accepted a path outside the outbox")

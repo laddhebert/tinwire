@@ -206,8 +206,11 @@ func (m Mac) Upload(ctx context.Context, local string) (string, error) {
 	if _, err := rand.Read(rnd[:]); err != nil {
 		return "", err
 	}
-	name := hex.EncodeToString(rnd[:]) + "-" + SafeName(filepath.Base(local))
-	script := `umask 077 && d="` + outbox + `" && mkdir -p "$d" && cat > "$d/"` + Quote(name) + ` && printf '%s' "$d/"` + Quote(name)
+	// Each upload gets its own random directory so the file keeps its original
+	// name: Messages shows the recipient the file name as uploaded.
+	dir := hex.EncodeToString(rnd[:])
+	name := SafeName(filepath.Base(local))
+	script := `umask 077 && d="` + outbox + `/` + dir + `" && mkdir -p "$d" && cat > "$d/"` + Quote(name) + ` && printf '%s' "$d/"` + Quote(name)
 	var out bytes.Buffer
 	if err := m.run(ctx, script, f, &out); err != nil {
 		return "", fmt.Errorf("upload: %w", err)
@@ -215,12 +218,18 @@ func (m Mac) Upload(ctx context.Context, local string) (string, error) {
 	return out.String(), nil
 }
 
-// RemoveUpload deletes a file previously returned by Upload.
+// RemoveUpload deletes a file previously returned by Upload, and its
+// per-upload directory.
 func (m Mac) RemoveUpload(ctx context.Context, remote string) error {
 	if !strings.Contains(remote, "/Library/Caches/tinwire/outbox/") || strings.Contains(remote, "..") {
 		return fmt.Errorf("refusing to remove %q", remote)
 	}
-	return m.run(ctx, `rm -f -- `+Quote(remote), nil, io.Discard)
+	dir := path.Dir(remote)
+	script := `rm -f -- ` + Quote(remote)
+	if strings.HasSuffix(path.Dir(dir), "/Library/Caches/tinwire/outbox") {
+		script += ` && rmdir -- ` + Quote(dir) + ` 2>/dev/null; true`
+	}
+	return m.run(ctx, script, nil, io.Discard)
 }
 
 // ---- tapbacks ----
