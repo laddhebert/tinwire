@@ -178,8 +178,10 @@ bar shows what just happened and the keys that apply where you are.
   terminal's own selection instead.
 - **Pictures and files**: click the `📎 … · click to open` line. iPhone photos (HEIC) and voice
   notes are converted on the Mac so they open on Linux.
-- **Send files**: drag them onto the window, paste a screenshot with `ctrl+v`, or `ctrl+a` and a
-  path. Videos over the 100 MB limit are compressed automatically to fit (needs `ffmpeg`).
+- **Send files**: drag them onto the window or paste a screenshot with `ctrl+v`, and they are
+  sent to the open chat straight away (type a caption first if you want one). `ctrl+a` and a path
+  attaches without sending, so you can add text and press enter. Videos over the 100 MB limit are
+  compressed automatically to fit (needs `ffmpeg`). `--no-send-on-drop` makes drops attach only.
 - **New lines**: shift+enter (or alt+enter).
 
 | Where | Key | Does |

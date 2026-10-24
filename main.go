@@ -64,6 +64,7 @@ func main() {
 		noRead     = flag.Bool("no-mark-read", false, "do not mark chats read on the Mac (no read receipts)")
 		noTyping   = flag.Bool("no-typing", false, "do not send typing indicators")
 		noMouse    = flag.Bool("no-mouse", false, "disable mouse support (keeps the terminal's own text selection)")
+		noDropSend = flag.Bool("no-send-on-drop", false, "dropping/pasting a file only attaches it; enter sends")
 		debugLog   = flag.String("debug-log", "", "append UI event diagnostics (no message content) to this file")
 		cacheDir   = flag.String("cache-dir", filepath.Join(cacheHome, "tinwire", "attachments"), "where downloaded attachments are cached")
 		dlDir      = flag.String("download-dir", filepath.Join(home, "Downloads"), "where 's' saves attachments")
@@ -137,6 +138,7 @@ func main() {
 		CacheDir:     *cacheDir,
 		DownloadDir:  *dlDir,
 		StateDir:     *stateDir,
+		SendOnDrop:   !*noDropSend,
 	})
 	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
 	if fi, err := os.Stdin.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {

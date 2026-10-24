@@ -237,7 +237,27 @@ func (m *Model) handlePaste(k tea.KeyMsg) (tea.Cmd, bool) {
 	if !ok {
 		return nil, false
 	}
-	return m.addAttachments(paths), true
+	return m.attachAndMaybeSend(paths), true
+}
+
+// attachAndMaybeSend attaches dropped or pasted files and, with SendOnDrop,
+// sends them straight away (with whatever is typed in the compose box as the
+// caption). A video that first needs compressing is sent when it is ready.
+func (m *Model) attachAndMaybeSend(paths []string) tea.Cmd {
+	before := len(m.attach)
+	cmd := m.addAttachments(paths)
+	if !m.cfg.SendOnDrop {
+		return cmd
+	}
+	switch {
+	case m.compress != nil:
+		m.sendWhenReady = true
+		m.setStatus("compressing "+filepath.Base(m.compress.src)+"… it will be sent when ready (ctrl+x cancels)", false)
+		return cmd
+	case len(m.attach) > before:
+		return tea.Batch(cmd, m.send())
+	}
+	return cmd // nothing was attached (error already shown)
 }
 
 // logInputChunk records the shape of a pasted/dropped chunk for --debug-log.

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Dropping a file, or pasting files/a screenshot with `ctrl+v`, sends it to the open chat right
+  away** (with anything typed in the compose box as the caption). Big videos are compressed
+  first and then sent. `--no-send-on-drop` restores attach-then-enter; `ctrl+a` still attaches
+  without sending.
+
 - If ffmpeg crashes while compressing (seen with ffmpeg 9.0.2's frame-threaded H.264 decoder), it is
   retried, the last time with a slower crash-safe decoder, before giving up.
 - Videos over the 100 MB attachment limit are compressed automatically with ffmpeg (H.264/AAC,

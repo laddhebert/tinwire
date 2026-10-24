@@ -46,6 +46,7 @@ type Config struct {
 	DownloadDir  string            // where 's' saves attachments
 	MaxAttach    int64             // largest file accepted for sending
 	StateDir     string            // local state (seen.json); empty = in memory only
+	SendOnDrop   bool              // a dropped/pasted file is sent at once (with any typed caption)
 }
 
 type focus int
@@ -584,7 +585,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case msg.err != nil:
 			m.setStatus(msg.err.Error(), true)
 		case len(msg.files) > 0:
-			return m, m.addAttachments(msg.files)
+			return m, m.attachAndMaybeSend(msg.files)
 		case msg.text != "" && m.focus == focusInput:
 			m.ta.InsertString(msg.text)
 			return m, m.noteTyping()

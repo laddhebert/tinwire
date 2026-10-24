@@ -85,9 +85,8 @@ mouse(0, 80, 38); mouse(0, 80, 38, True); pump(1.5)
 results["click compose focuses it"] = COMPOSE in take()
 uri = "file://" + img.replace(" ", "%20")
 os.write(fd, b"\x1b[200~" + uri.encode() + b"\r\n\x1b[201~"); pump(1.5)
-results["dropped file shows as attachment"] = b"drop test.png" in take()
-os.write(fd, b"\r"); pump(1.5)
-results["dry-run send includes the file"] = b"would send" in take()
+out = take()
+results["dropping a file sends it (dry-run)"] = b"would send" in out and b"drop test.png" in out
 # Shift+Enter as foot sends it (ESC[13;2u), with typing right behind it.
 os.write(fd, b"a"); os.write(fd, b"\x1b[13;2u"); os.write(fd, b"b"); pump(0.5)
 os.write(fd, b"\r"); pump(1.5)

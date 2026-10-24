@@ -147,3 +147,37 @@ func TestUnbracketedDropBurstAttaches(t *testing.T) {
 		t.Fatalf("text burst not typed: %q", nm.(Model).ta.Value())
 	}
 }
+
+func TestDropSendsImmediately(t *testing.T) {
+	f := touch(t, t.TempDir(), "photo.jpg")
+	m := resize(fixture(), 140, 40)
+	m.open = 1
+	m.cfg.SendOnDrop = true
+	m.cfg.DryRun = true
+	m.focus = focusInput
+	m.ta.Focus()
+	m.ta.SetValue("look at this")
+	nm, _ := m.Update(pasteKey("file://" + f))
+	m = nm.(Model)
+	if !strings.Contains(m.status, "would send 12 chars + photo.jpg") || len(m.attach) != 0 || m.ta.Value() != "" {
+		t.Fatalf("drop did not send: status=%q attach=%v compose=%q", m.status, m.attach, m.ta.Value())
+	}
+	// From the chat list too: the drop opens nothing new, it sends to the open chat.
+	m.focus = focusList
+	nm, _ = m.Update(pasteKey(f))
+	if !strings.Contains(nm.(Model).status, "would send 0 chars + photo.jpg") {
+		t.Fatalf("drop from list focus: %q", nm.(Model).status)
+	}
+}
+
+func TestDropWithoutAutoSendOnlyAttaches(t *testing.T) {
+	f := touch(t, t.TempDir(), "photo.jpg")
+	m := resize(fixture(), 140, 40)
+	m.open = 1
+	m.cfg.SendOnDrop = false
+	m.cfg.DryRun = true
+	nm, _ := m.Update(pasteKey(f))
+	if mm := nm.(Model); len(mm.attach) != 1 || strings.Contains(mm.status, "would send") {
+		t.Fatalf("--no-send-on-drop should only attach: %v %q", mm.attach, mm.status)
+	}
+}

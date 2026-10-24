@@ -265,3 +265,24 @@ func TestClickPendingAttachmentPreviewsIt(t *testing.T) {
 		t.Fatal("preview must not remove the attachment")
 	}
 }
+
+func TestDroppedBigVideoSendsWhenCompressed(t *testing.T) {
+	fakeTools(t, 600_000)
+	src := filepath.Join(t.TempDir(), "big.mp4")
+	os.WriteFile(src, make([]byte, 2_000_000), 0o600)
+	m := resize(fixture(), 140, 40)
+	m.open = 1
+	m.cfg.SendOnDrop = true
+	m.cfg.DryRun = true
+	m.cfg.MaxAttach = 1_000_000
+	m.cfg.CacheDir = filepath.Join(t.TempDir(), "attachments")
+	nm, cmd := m.Update(pasteKey(src))
+	m = nm.(Model)
+	if !m.sendWhenReady || !strings.Contains(m.status, "will be sent when ready") {
+		t.Fatalf("big video drop: sendWhenReady=%v status=%q", m.sendWhenReady, m.status)
+	}
+	m = drive(t, m, cmd, func(m Model) bool { return m.compress == nil })
+	if !strings.Contains(m.status, "would send 0 chars + big-compressed.mp4") {
+		t.Fatalf("not sent after compression: %q", m.status)
+	}
+}
