@@ -111,7 +111,7 @@ func (m *Model) startCompress(src string) tea.Cmd {
 	job := &compressJob{id: m.compressSeq, src: src, cancel: cancel, ch: make(chan tea.Msg, 32)}
 	m.compress = job
 	target := m.cfg.MaxAttach * 9 / 10
-	outDir := filepath.Join(filepath.Dir(m.cfg.CacheDir), "outgoing")
+	outDir := m.outgoingDir()
 	m.setStatus("compressing "+filepath.Base(src)+" to fit iMessage's limit… (ctrl+x cancels)", false)
 	go runCompress(ctx, job, src, outDir, target)
 	return waitCompress(job.ch)
@@ -213,6 +213,19 @@ func runFFmpeg(ctx context.Context, job *compressJob, enc, src, out string, vKbp
 		return fmt.Errorf("%s: %w", enc, err)
 	}
 	return nil
+}
+
+// outgoingDir holds videos compressed by tinwire. Only files in it are ever
+// deleted by cleanupOutgoing; files the user attached are never touched.
+func (m Model) outgoingDir() string { return filepath.Join(filepath.Dir(m.cfg.CacheDir), "outgoing") }
+
+func (m Model) cleanupOutgoing(files []string) {
+	dir := m.outgoingDir() + string(os.PathSeparator)
+	for _, f := range files {
+		if strings.HasPrefix(f, dir) {
+			os.Remove(f)
+		}
+	}
 }
 
 // cancelCompress stops a running compression and drops queued ones.

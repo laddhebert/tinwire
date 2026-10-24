@@ -226,6 +226,7 @@ type sentMsg struct {
 	to     string
 	text   string
 	unsent []string // files not sent (restored to the compose box on a safe failure)
+	files  []string // every file this send tried
 	sent   int      // files that did go out before an error
 	res    imsg.SendResult
 	err    error
@@ -546,6 +547,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.setStatus(fmt.Sprintf("sent (%d this session)", m.sends), false)
+		m.cleanupOutgoing(msg.files) // compressed copies are no longer needed
 		if msg.to != "" {
 			m.pendingOpen = msg.to
 			return m, m.loadChats()
@@ -859,6 +861,7 @@ func (m Model) keyInput(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if len(m.attach) > 0 {
+			m.cleanupOutgoing(m.attach)
 			m.attach = nil
 			m.layout()
 			m.setStatus("attachments removed", false)
@@ -1063,7 +1066,7 @@ func (m *Model) send() tea.Cmd {
 	m.setStatus("sending "+what+" to "+target+"…", false)
 	api, mac, chatID, to := m.api, m.cfg.Mac, m.open, m.openTo
 	return func() tea.Msg {
-		out := sentMsg{chatID: chatID, to: to, text: text}
+		out := sentMsg{chatID: chatID, to: to, text: text, files: files}
 		send := func(text, remoteFile string) (imsg.SendResult, error) {
 			if chatID != 0 {
 				return api.SendChat(chatID, text, remoteFile)

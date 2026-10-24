@@ -169,3 +169,20 @@ func TestErrorsGetTheWholeStatusBar(t *testing.T) {
 		t.Fatalf("error truncated: %q", bar)
 	}
 }
+
+func TestOutgoingCleanupOnlyTouchesCompressedCopies(t *testing.T) {
+	m := resize(fixture(), 100, 30)
+	m.cfg.CacheDir = filepath.Join(t.TempDir(), "attachments")
+	os.MkdirAll(m.outgoingDir(), 0o700)
+	ours := filepath.Join(m.outgoingDir(), "clip-compressed.mp4")
+	users := filepath.Join(t.TempDir(), "clip.mp4")
+	os.WriteFile(ours, []byte("x"), 0o600)
+	os.WriteFile(users, []byte("x"), 0o600)
+	m.cleanupOutgoing([]string{ours, users})
+	if _, err := os.Stat(ours); !os.IsNotExist(err) {
+		t.Fatal("compressed copy not removed")
+	}
+	if _, err := os.Stat(users); err != nil {
+		t.Fatal("the user's own file was removed")
+	}
+}

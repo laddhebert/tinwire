@@ -8,6 +8,8 @@
   watchable quality get a clear message to trim them.
 - Error messages are no longer cut off by the key hints in the status bar.
 - `enter` while a video is still compressing says so instead of sending without it.
+- Compressed copies are deleted after sending (or when removed with `ctrl+x`); only files tinwire
+  created are ever deleted.
 
 ## 0.1.0 (2026-10-23)
 
