@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-10-24)
 
 - A send appears in the conversation immediately as "⏳ sending… Ns" and is replaced by the real
   message once Messages records it; your messages then show "✓ sent", "✓✓ delivered" or
