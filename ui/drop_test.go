@@ -127,3 +127,23 @@ func TestAttachPromptAcceptsDropAndMultiDryRun(t *testing.T) {
 		t.Fatalf("dry-run multi send: %q", m.status)
 	}
 }
+
+func TestUnbracketedDropBurstAttaches(t *testing.T) {
+	dir := t.TempDir()
+	f := touch(t, dir, "clip.mp4")
+	m := resize(fixture(), 100, 30)
+	m.open = 1
+	m.focus = focusInput
+	m.ta.Focus()
+	// No bracketed-paste markers: the whole path arrives as one burst of runes.
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("file://" + f)})
+	m = nm.(Model)
+	if len(m.attach) != 1 || m.ta.Value() != "" {
+		t.Fatalf("unbracketed drop: attach=%v compose=%q", m.attach, m.ta.Value())
+	}
+	// Ordinary multi-rune text (e.g. IME input) still types normally.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("héllo")})
+	if nm.(Model).ta.Value() != "héllo" {
+		t.Fatalf("text burst not typed: %q", nm.(Model).ta.Value())
+	}
+}

@@ -632,6 +632,9 @@ func (m *Model) typingTick() tea.Cmd {
 // ---- keys ----
 
 func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if k.Paste || len(k.Runes) > 1 || k.Type != tea.KeyRunes {
+		debugf("key: type=%d paste=%v runes=%d focus=%d open=%d", k.Type, k.Paste, len(k.Runes), m.focus, m.open)
+	}
 	m.clearSelection() // any key dismisses a text selection
 	switch k.String() {
 	case "ctrl+c":

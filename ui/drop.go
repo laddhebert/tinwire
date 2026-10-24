@@ -222,15 +222,50 @@ func (m *Model) addAttachments(paths []string) tea.Cmd {
 // handlePaste attaches dropped/pasted files; anything else is ordinary text
 // for the compose box. It returns handled=false to let the caller deal with
 // plain text in its own way.
+//
+// Some terminals deliver a drop without bracketed-paste markers, as a burst
+// of plain input. Typing arrives one key at a time, so any multi-rune chunk is
+// also checked: if it is entirely existing files it is a drop.
 func (m *Model) handlePaste(k tea.KeyMsg) (tea.Cmd, bool) {
-	if !k.Paste {
+	burst := k.Type == tea.KeyRunes && len(k.Runes) > 1
+	if !k.Paste && !burst {
 		return nil, false
 	}
-	paths, ok := droppedFiles(string(k.Runes))
+	text := string(k.Runes)
+	paths, ok := droppedFiles(text)
+	logInputChunk(k.Paste, text, paths, ok)
 	if !ok {
 		return nil, false
 	}
 	return m.addAttachments(paths), true
+}
+
+// logInputChunk records the shape of a pasted/dropped chunk for --debug-log.
+// Text that does not look like paths is never logged, only its size.
+func logInputChunk(paste bool, text string, paths []string, ok bool) {
+	t := strings.TrimSpace(text)
+	looksLikePath := strings.HasPrefix(t, "file://") || strings.HasPrefix(t, "/") || strings.HasPrefix(t, "~") ||
+		strings.HasPrefix(t, "'") || strings.HasPrefix(t, `"`)
+	if !looksLikePath {
+		debugf("input chunk: paste=%v runes=%d lines=%d looks-like-path=false", paste, len([]rune(text)), strings.Count(text, "\n")+1)
+		return
+	}
+	if len(t) > 400 {
+		t = t[:400] + "…"
+	}
+	debugf("input chunk: paste=%v runes=%d recognized-files=%v (%d) raw=%q", paste, len([]rune(text)), ok, len(paths), t)
+	if !ok {
+		for _, w := range strings.Fields(strings.NewReplacer("\r", " ", "\n", " ").Replace(text)) {
+			p := w
+			if strings.HasPrefix(p, "file://") {
+				if u, err := url.Parse(p); err == nil {
+					p = u.Path
+				}
+			}
+			_, err := os.Stat(expandHome(p))
+			debugf("  candidate %q exists=%v", p, err == nil)
+		}
+	}
 }
 
 type clipboardMsg struct {
