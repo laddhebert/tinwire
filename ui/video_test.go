@@ -33,7 +33,13 @@ func TestIsVideoAndArgs(t *testing.T) {
 	if isVideo("e.jpg") || isVideo("f") {
 		t.Error("non-video detected")
 	}
-	a := strings.Join(ffmpegArgs("libx264", "in.mov", "out.mp4", 1800), " ")
+	if a := strings.Join(ffmpegArgs("libx264", "in.mov", "out.mp4", 1800, false), " "); strings.Contains(a, "thread_type") {
+		t.Errorf("fast path must use the default (frame-threaded) decoder: %s", a)
+	}
+	if a := strings.Join(ffmpegArgs("libx264", "in.mov", "out.mp4", 1800, true), " "); !strings.Contains(a, "-thread_type slice -i in.mov") {
+		t.Errorf("safe decode not applied: %s", a)
+	}
+	a := strings.Join(ffmpegArgs("libx264", "in.mov", "out.mp4", 1800, false), " ")
 	for _, want := range []string{"-c:v libx264", "-b:v 1800k", "-maxrate 1800k", "-preset veryfast", "-fpsmax 30", "-c:a aac", "+faststart", "-progress pipe:1", "0:a:0?"} {
 		if !strings.Contains(a, want) {
 			t.Errorf("args missing %q: %s", want, a)
@@ -184,5 +190,46 @@ func TestOutgoingCleanupOnlyTouchesCompressedCopies(t *testing.T) {
 	}
 	if _, err := os.Stat(users); err != nil {
 		t.Fatal("the user's own file was removed")
+	}
+}
+
+// fakeCrashyTools: ffmpeg segfaults on its first NVENC run (like the real
+// intermittent decoder crash), then succeeds on the retry.
+func fakeCrashyTools(t *testing.T) string {
+	t.Helper()
+	bin := t.TempDir()
+	state := filepath.Join(bin, "runs")
+	os.WriteFile(filepath.Join(bin, "ffprobe"), []byte("#!/bin/sh\necho 10.0\n"), 0o755)
+	os.WriteFile(filepath.Join(bin, "ffmpeg"), []byte(`#!/bin/sh
+echo run >> "`+state+`"
+n=$(wc -l < "`+state+`")
+case "$*" in *thread_type*) echo safe >> "`+state+`.safe";; esac
+if [ "$n" -le 2 ]; then kill -SEGV $$; fi
+for a in "$@"; do out="$a"; done
+echo out_time_us=10000000; echo progress=end
+head -c 500000 /dev/zero > "$out"
+`), 0o755)
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	return state
+}
+
+func TestCrashIsRetried(t *testing.T) {
+	state := fakeCrashyTools(t)
+	src := filepath.Join(t.TempDir(), "clip.mp4")
+	os.WriteFile(src, make([]byte, 2_000_000), 0o600)
+	m := resize(fixture(), 140, 40)
+	m.open = 1
+	m.cfg.MaxAttach = 1_000_000
+	m.cfg.CacheDir = filepath.Join(t.TempDir(), "attachments")
+	m = drive(t, m, m.startCompress(src), func(m Model) bool { return m.compress == nil })
+	b, _ := os.ReadFile(state)
+	if runs := strings.Count(string(b), "run"); runs != 3 {
+		t.Fatalf("want 2 crashes + 1 successful retry, got %d runs", runs)
+	}
+	if _, err := os.Stat(state + ".safe"); err != nil {
+		t.Fatal("third attempt did not use the crash-safe decoder")
+	}
+	if len(m.attach) != 1 {
+		t.Fatalf("not attached after retry: %q", m.status)
 	}
 }

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- If ffmpeg crashes while compressing (seen with ffmpeg 9.0.2's frame-threaded H.264 decoder), it is
+  retried, the last time with a slower crash-safe decoder, before giving up.
 - Videos over the 100 MB attachment limit are compressed automatically with ffmpeg (H.264/AAC,
   up to 1080p/30 fps, sized to ~90 MB; NVENC when available, libx264 otherwise) and then
   attached. Progress shows in the status bar; `ctrl+x` cancels. Clips too long to fit at

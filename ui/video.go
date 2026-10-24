@@ -79,13 +79,22 @@ func probeDuration(ctx context.Context, path string) (time.Duration, error) {
 	return time.Duration(f * float64(time.Second)), nil
 }
 
-func ffmpegArgs(encoder, src, out string, vKbps int) []string {
-	args := []string{"-y", "-hide_banner", "-loglevel", "error", "-i", src,
+// ffmpegArgs builds the command. safeDecode switches the decoder to slice
+// threading: ffmpeg 9.0.2's frame-threaded H.264 decoder crashed
+// intermittently (SIGSEGV in its frame threads) on a 1 GB screen recording,
+// but slice threading decodes such files ~4x slower (114 s vs 27 s), so it is
+// only used after crashes.
+func ffmpegArgs(encoder, src, out string, vKbps int, safeDecode bool) []string {
+	args := []string{"-y", "-hide_banner", "-loglevel", "error"}
+	if safeDecode {
+		args = append(args, "-thread_type", "slice")
+	}
+	args = append(args, "-i", src,
 		"-map", "0:v:0", "-map", "0:a:0?",
 		"-vf", "scale='min(1920,iw)':'min(1080,ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2",
 		"-fpsmax", "30", "-pix_fmt", "yuv420p",
 		"-c:v", encoder,
-		"-b:v", fmt.Sprintf("%dk", vKbps), "-maxrate", fmt.Sprintf("%dk", vKbps), "-bufsize", fmt.Sprintf("%dk", 2*vKbps)}
+		"-b:v", fmt.Sprintf("%dk", vKbps), "-maxrate", fmt.Sprintf("%dk", vKbps), "-bufsize", fmt.Sprintf("%dk", 2*vKbps))
 	if encoder == "libx264" {
 		args = append(args, "-preset", "veryfast")
 	} else {
@@ -149,15 +158,24 @@ func runCompress(ctx context.Context, job *compressJob, src, outDir string, targ
 	base := strings.TrimSuffix(filepath.Base(src), filepath.Ext(src))
 	out := filepath.Join(outDir, base+"-compressed.mp4")
 	var lastErr error
+encoders:
 	for _, enc := range []string{"h264_nvenc", "libx264"} {
-		if ctx.Err() != nil {
-			break
+		// A crash (killed by a signal) is retried with the same encoder, the
+		// last time with the slower crash-safe decoder; any other failure
+		// moves on to the next encoder.
+		for attempt := 1; attempt <= 3; attempt++ {
+			if ctx.Err() != nil {
+				break encoders
+			}
+			lastErr = runFFmpeg(ctx, job, enc, src, out, vKbps, dur, attempt == 3)
+			if lastErr == nil {
+				break encoders
+			}
+			os.Remove(out)
+			if !crashed(lastErr) {
+				break
+			}
 		}
-		lastErr = runFFmpeg(ctx, job, enc, src, out, vKbps, dur)
-		if lastErr == nil {
-			break
-		}
-		os.Remove(out)
 	}
 	if ctx.Err() != nil {
 		os.Remove(out)
@@ -171,8 +189,15 @@ func runCompress(ctx context.Context, job *compressJob, src, outDir string, targ
 	done(out, nil)
 }
 
-func runFFmpeg(ctx context.Context, job *compressJob, enc, src, out string, vKbps int, dur time.Duration) error {
-	cmd := exec.CommandContext(ctx, "ffmpeg", ffmpegArgs(enc, src, out, vKbps)...)
+// crashed reports whether ffmpeg was killed by a signal (e.g. SIGSEGV) rather
+// than exiting with an error.
+func crashed(err error) bool {
+	var ee *exec.ExitError
+	return errors.As(err, &ee) && ee.ProcessState != nil && ee.ProcessState.ExitCode() == -1
+}
+
+func runFFmpeg(ctx context.Context, job *compressJob, enc, src, out string, vKbps int, dur time.Duration, safeDecode bool) error {
+	cmd := exec.CommandContext(ctx, "ffmpeg", ffmpegArgs(enc, src, out, vKbps, safeDecode)...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -208,7 +233,7 @@ func runFFmpeg(ctx context.Context, job *compressJob, enc, src, out string, vKbp
 	if err := cmd.Wait(); err != nil {
 		if s := strings.TrimSpace(stderr.String()); s != "" {
 			lines := strings.Split(s, "\n")
-			return fmt.Errorf("%s: %s", enc, lines[len(lines)-1])
+			return fmt.Errorf("%s: %s: %w", enc, lines[len(lines)-1], err)
 		}
 		return fmt.Errorf("%s: %w", enc, err)
 	}
