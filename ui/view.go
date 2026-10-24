@@ -132,6 +132,19 @@ func (m Model) View() string {
 }
 
 func (m Model) renderComposeRule(w int) string {
+	if m.compress != nil {
+		label := "⏳ compressing " + filepath.Base(m.compress.src)
+		if m.compressPct > 0 {
+			label += fmt.Sprintf(" %d%%", m.compressPct)
+		}
+		if m.sendWhenReady {
+			label += " · will send when ready"
+		} else {
+			label += " · enter sends when ready"
+		}
+		label += " · ctrl+x cancels "
+		return truncate(attachTag.Render(label)+paneSep.Render(strings.Repeat("─", max(0, w-lipgloss.Width(label)))), w)
+	}
 	if len(m.attach) == 0 {
 		return paneSep.Render(strings.Repeat("─", w))
 	}
@@ -143,9 +156,10 @@ func (m Model) renderComposeRule(w int) string {
 			total += st.Size()
 		}
 	}
-	label := "📎 " + strings.Join(names, ", ") + " (" + humanBytes(total) + ") · ctrl+x remove "
+	tail := " · enter sends · click to preview · ctrl+x removes "
+	label := "📎 " + strings.Join(names, ", ") + " (" + humanBytes(total) + ")" + tail
 	if lipgloss.Width(label) > w-4 {
-		label = fmt.Sprintf("📎 %d files (%s) · ctrl+x remove ", len(m.attach), humanBytes(total))
+		label = fmt.Sprintf("📎 %d files (%s)", len(m.attach), humanBytes(total)) + tail
 	}
 	return truncate(attachTag.Render(label)+paneSep.Render(strings.Repeat("─", max(0, w-lipgloss.Width(label)))), w)
 }

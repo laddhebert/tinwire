@@ -122,6 +122,8 @@ type Model struct {
 	compress      *compressJob // running video compression (video.go)
 	compressQueue []string
 	compressSeq   int
+	compressPct   int
+	sendWhenReady bool // enter was pressed during compression: send once attached
 	sends         int
 	sending       bool
 	laneBlocked   bool
@@ -1022,7 +1024,8 @@ func (m *Model) send() tea.Cmd {
 	files := append([]string(nil), m.attach...)
 	switch {
 	case m.compress != nil:
-		m.setStatus("a video is still being compressed; send when it is attached (ctrl+x cancels)", true)
+		m.sendWhenReady = true
+		m.setStatus("will send as soon as the video is compressed (ctrl+x cancels)", false)
 		return nil
 	case text == "" && len(files) == 0:
 		return nil

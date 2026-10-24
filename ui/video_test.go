@@ -126,21 +126,25 @@ func TestOversizedVideoIsCompressedAndAttached(t *testing.T) {
 	m.cfg.MaxAttach = 1_000_000 // 1 MB limit
 	m.cfg.CacheDir = filepath.Join(t.TempDir(), "attachments")
 	m.focus = focusInput
+	m.cfg.DryRun = true // the queued send must not touch a real chat
 
 	nm, cmd := m.Update(pasteKey("file://" + strings.ReplaceAll(src, " ", "%20")))
 	m = nm.(Model)
 	if m.compress == nil || !strings.Contains(m.status, "compressing") {
 		t.Fatalf("compression did not start: %q", m.status)
 	}
-	if c := m.send(); c != nil || !strings.Contains(m.status, "still being compressed") {
-		t.Fatalf("send allowed during compression: %q", m.status)
+	if !strings.Contains(stripANSI(m.renderComposeRule(120)), "compressing screen recording.mp4") {
+		t.Fatalf("compose line does not show compression: %q", stripANSI(m.renderComposeRule(120)))
+	}
+	// Enter during compression queues the send instead of dropping it.
+	m.ta.SetValue("here it is")
+	if c := m.send(); c != nil || !m.sendWhenReady || !strings.Contains(m.status, "will send") {
+		t.Fatalf("enter during compression: sendWhenReady=%v status=%q", m.sendWhenReady, m.status)
 	}
 	m = drive(t, m, cmd, func(m Model) bool { return m.compress == nil })
-	if len(m.attach) != 1 || !strings.HasSuffix(m.attach[0], "screen recording-compressed.mp4") {
-		t.Fatalf("compressed video not attached: %v status=%q", m.attach, m.status)
-	}
-	if !strings.Contains(m.status, "compressed screen recording.mp4") {
-		t.Fatalf("status = %q", m.status)
+	// The queued send ran (dry-run): text + the compressed file, compose cleared.
+	if !strings.Contains(m.status, "would send 10 chars + screen recording-compressed.mp4") || len(m.attach) != 0 || m.sendWhenReady {
+		t.Fatalf("queued send did not run: status=%q attach=%v", m.status, m.attach)
 	}
 }
 
@@ -231,5 +235,33 @@ func TestCrashIsRetried(t *testing.T) {
 	}
 	if len(m.attach) != 1 {
 		t.Fatalf("not attached after retry: %q", m.status)
+	}
+}
+
+func TestClickPendingAttachmentPreviewsIt(t *testing.T) {
+	bin := t.TempDir()
+	log := filepath.Join(bin, "opened")
+	os.WriteFile(filepath.Join(bin, "xdg-open"), []byte("#!/bin/sh\necho \"$1\" >> '"+log+"'\n"), 0o755)
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	vid := filepath.Join(t.TempDir(), "clip.mp4")
+	os.WriteFile(vid, []byte("x"), 0o600)
+
+	m := resize(fixture(), 140, 40)
+	m.open = 1
+	m.attach = []string{vid}
+	m.layout()
+	rule := stripANSI(m.renderComposeRule(120))
+	if !strings.Contains(rule, "enter sends · click to preview · ctrl+x removes") {
+		t.Fatalf("attachment line wording: %q", rule)
+	}
+	listW, _, _, vpH := m.dims()
+	m = click(m, listW+10, 1+vpH) // the attachment line sits right above the compose box
+	time.Sleep(300 * time.Millisecond)
+	b, _ := os.ReadFile(log)
+	if strings.TrimSpace(string(b)) != vid || !strings.Contains(m.status, "previewing clip.mp4") {
+		t.Fatalf("preview not opened: xdg-open got %q, status %q", b, m.status)
+	}
+	if len(m.attach) != 1 {
+		t.Fatal("preview must not remove the attachment")
 	}
 }

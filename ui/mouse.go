@@ -131,6 +131,9 @@ func (m Model) handleMouse(e tea.MouseMsg) (tea.Model, tea.Cmd) {
 			m.cursor = i
 			m.refreshVP(false)
 			return m, cmd
+		case e.Y == composeTop && len(m.attach) > 0:
+			// The attachment line above the compose box: preview what will be sent.
+			return m, m.previewLocal(m.attach)
 		case e.Y >= composeTop:
 			if m.open == 0 && m.openTo == "" {
 				return m, nil

@@ -9,7 +9,10 @@
   attached. Progress shows in the status bar; `ctrl+x` cancels. Clips too long to fit at
   watchable quality get a clear message to trim them.
 - Error messages are no longer cut off by the key hints in the status bar.
-- `enter` while a video is still compressing says so instead of sending without it.
+- `enter` while a video is still compressing queues the send; it goes out automatically once the
+  video is attached (`ctrl+x` cancels). The attachment line shows the compression progress.
+- Clicking the attachment line above the compose box previews the file (e.g. plays the video)
+  before sending; the line says "enter sends · click to preview · ctrl+x removes".
 - Drops that arrive without bracketed-paste markers (a burst of plain input) are recognized too.
 - `--debug-log` also records the shape of pasted/dropped input (paths only, never message text).
 - Sent files keep their original name for the recipient (uploads no longer show a random prefix).

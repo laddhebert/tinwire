@@ -253,6 +253,35 @@ func (m Model) cleanupOutgoing(files []string) {
 	}
 }
 
+// previewLocal opens files that are about to be sent (local paths) in the
+// default viewer, so a video can be checked before sending.
+func (m *Model) previewLocal(paths []string) tea.Cmd {
+	var opened, skipped []string
+	for _, p := range paths {
+		if !openable[strings.ToLower(filepath.Ext(p))] {
+			skipped = append(skipped, filepath.Base(p))
+			continue
+		}
+		if err := startDetached("xdg-open", p); err != nil {
+			m.setStatus("preview: xdg-open: "+err.Error(), true)
+			return nil
+		}
+		opened = append(opened, filepath.Base(p))
+	}
+	msg := ""
+	if len(opened) > 0 {
+		msg = "previewing " + strings.Join(opened, ", ") + " · enter sends"
+	}
+	if len(skipped) > 0 {
+		if msg != "" {
+			msg += " · "
+		}
+		msg += "no preview for " + strings.Join(skipped, ", ")
+	}
+	m.setStatus(msg, false)
+	return nil
+}
+
 // cancelCompress stops a running compression and drops queued ones.
 func (m *Model) cancelCompress() bool {
 	if m.compress == nil && len(m.compressQueue) == 0 {
@@ -262,6 +291,7 @@ func (m *Model) cancelCompress() bool {
 		m.compress.cancel()
 	}
 	m.compressQueue = nil
+	m.sendWhenReady = false
 	return true
 }
 
@@ -272,6 +302,7 @@ func (m *Model) handleCompress(msg tea.Msg) (tea.Cmd, bool) {
 		if m.compress == nil || msg.job != m.compress.id {
 			return nil, true
 		}
+		m.compressPct = msg.pct
 		m.setStatus(fmt.Sprintf("compressing %s… %d%% (ctrl+x cancels)", filepath.Base(m.compress.src), msg.pct), false)
 		return waitCompress(m.compress.ch), true
 	case compressDoneMsg:
@@ -279,11 +310,14 @@ func (m *Model) handleCompress(msg tea.Msg) (tea.Cmd, bool) {
 			return nil, true
 		}
 		m.compress = nil
+		m.compressPct = 0
 		var cmds []tea.Cmd
 		switch {
 		case errors.Is(msg.err, context.Canceled):
+			m.sendWhenReady = false
 			m.setStatus("video compression cancelled", false)
 		case msg.err != nil:
+			m.sendWhenReady = false
 			m.setStatus("attach: "+filepath.Base(msg.src)+": "+msg.err.Error(), true)
 		default:
 			if st, err := os.Stat(msg.out); err == nil && st.Size() > m.cfg.MaxAttach {
@@ -300,6 +334,9 @@ func (m *Model) handleCompress(msg tea.Msg) (tea.Cmd, bool) {
 			next := m.compressQueue[0]
 			m.compressQueue = m.compressQueue[1:]
 			cmds = append(cmds, m.startCompress(next))
+		} else if m.sendWhenReady && msg.err == nil {
+			m.sendWhenReady = false
+			cmds = append(cmds, m.send())
 		}
 		return tea.Batch(cmds...), true
 	}
