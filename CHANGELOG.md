@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-10-23)
 
 First public release. tinwire grew out of a private tool used daily on an Omarchy Linux desktop
 against a Mac mini on macOS 26.7.
