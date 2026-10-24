@@ -165,9 +165,31 @@ func (m *Model) addAttachments(paths []string) tea.Cmd {
 		m.setStatus("open a chat first, then drop or paste the file", true)
 		return nil
 	}
+	// Oversized videos are compressed to fit (video.go) instead of refused.
+	var big, rest []string
+	for _, p := range paths {
+		if st, err := os.Stat(p); err == nil && st.Mode().IsRegular() && st.Size() > m.cfg.MaxAttach && isVideo(p) {
+			big = append(big, p)
+		} else {
+			rest = append(rest, p)
+		}
+	}
+	var cmds []tea.Cmd
+	for _, p := range big {
+		cmds = append(cmds, m.startCompress(p))
+	}
+	if len(rest) == 0 {
+		if m.focus != focusInput {
+			m.focus = focusInput
+			m.refreshVP(true)
+			cmds = append(cmds, m.ta.Focus())
+		}
+		return tea.Batch(cmds...)
+	}
+	paths = rest
 	if err := m.checkFiles(paths); err != nil {
 		m.setStatus("attach: "+err.Error(), true)
-		return nil
+		return tea.Batch(cmds...)
 	}
 	seen := map[string]bool{}
 	for _, p := range m.attach {
@@ -185,14 +207,16 @@ func (m *Model) addAttachments(paths []string) tea.Cmd {
 	if n > 1 {
 		what = fmt.Sprintf("%d files", n)
 	}
-	m.setStatus("attached "+what+" · enter sends · ctrl+x removes", false)
-	cmd := m.stopTyping()
+	if m.compress == nil {
+		m.setStatus("attached "+what+" · enter sends · ctrl+x removes", false)
+	}
+	cmds = append(cmds, m.stopTyping())
 	if m.focus != focusInput {
 		m.focus = focusInput
 		m.refreshVP(true)
-		return tea.Batch(cmd, m.ta.Focus())
+		cmds = append(cmds, m.ta.Focus())
 	}
-	return cmd
+	return tea.Batch(cmds...)
 }
 
 // handlePaste attaches dropped/pasted files; anything else is ordinary text

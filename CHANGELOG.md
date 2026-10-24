@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Videos over the 100 MB attachment limit are compressed automatically with ffmpeg (H.264/AAC,
+  up to 1080p/30 fps, sized to ~90 MB; NVENC when available, libx264 otherwise) and then
+  attached. Progress shows in the status bar; `ctrl+x` cancels. Clips too long to fit at
+  watchable quality get a clear message to trim them.
+- Error messages are no longer cut off by the key hints in the status bar.
+- `enter` while a video is still compressing says so instead of sending without it.
+
 ## 0.1.0 (2026-10-23)
 
 First public release. tinwire grew out of a private tool used daily on an Omarchy Linux desktop

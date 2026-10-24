@@ -179,7 +179,7 @@ bar shows what just happened and the keys that apply where you are.
 - **Pictures and files**: click the `📎 … · click to open` line. iPhone photos (HEIC) and voice
   notes are converted on the Mac so they open on Linux.
 - **Send files**: drag them onto the window, paste a screenshot with `ctrl+v`, or `ctrl+a` and a
-  path.
+  path. Videos over the 100 MB limit are compressed automatically to fit (needs `ffmpeg`).
 - **New lines**: shift+enter (or alt+enter).
 
 | Where | Key | Does |

@@ -117,10 +117,14 @@ type Model struct {
 	termFocused bool
 	w, h        int
 
-	attach      []string // local files queued for the next send (ctrl+a, drop, ctrl+v)
-	sends       int
-	sending     bool
-	laneBlocked bool
+	attach []string // local files queued for the next send (ctrl+a, drop, ctrl+v)
+
+	compress      *compressJob // running video compression (video.go)
+	compressQueue []string
+	compressSeq   int
+	sends         int
+	sending       bool
+	laneBlocked   bool
 
 	typingOn  bool
 	typingFor int64
@@ -373,6 +377,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if cmd, ok := m.handleCompress(msg); ok {
+		return m, cmd
+	}
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		return m.handleMouse(msg)
@@ -627,6 +634,13 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch k.String() {
 	case "ctrl+c":
 		return m.quit()
+	case "ctrl+x":
+		// Cancelling a video compression works from anywhere; otherwise ctrl+x
+		// falls through to the compose box (remove attachments).
+		if m.cancelCompress() {
+			m.setStatus("cancelling video compression…", false)
+			return m, nil
+		}
 	case "ctrl+r":
 		return m.refresh()
 	case "ctrl+n":
@@ -840,6 +854,10 @@ func (m Model) keyInput(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+v":
 		return m, m.pasteClipboard()
 	case "ctrl+x":
+		if m.cancelCompress() {
+			m.setStatus("cancelling video compression…", false)
+			return m, nil
+		}
 		if len(m.attach) > 0 {
 			m.attach = nil
 			m.layout()
@@ -910,10 +928,6 @@ func (m Model) keyTo(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) keyAttach(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	finish := func(paths []string) (tea.Model, tea.Cmd) {
-		if err := m.checkFiles(paths); err != nil {
-			m.setStatus("attach: "+err.Error(), true)
-			return m, nil
-		}
 		m.at.Blur()
 		m.focus = focusInput
 		cmd := m.addAttachments(paths)
@@ -1001,6 +1015,9 @@ func (m *Model) send() tea.Cmd {
 	text := strings.TrimSpace(m.ta.Value())
 	files := append([]string(nil), m.attach...)
 	switch {
+	case m.compress != nil:
+		m.setStatus("a video is still being compressed; send when it is attached (ctrl+x cancels)", true)
+		return nil
 	case text == "" && len(files) == 0:
 		return nil
 	case m.open == 0 && m.openTo == "":

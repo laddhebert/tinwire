@@ -433,8 +433,11 @@ func (m Model) renderStatus() string {
 		st = errStyle.Render(st)
 	}
 	left := conn + flags + " " + st
-	// Keep the key hints visible: truncate the status message to make room,
-	// and only drop the hints when the window is too narrow for both.
+	// Errors get the whole bar: a truncated error is useless. Otherwise keep the
+	// key hints visible by truncating the status message to make room.
+	if m.statusErr && lipgloss.Width(left)+lipgloss.Width(hint)+2 > m.w {
+		return truncate(left, m.w)
+	}
 	hintW := lipgloss.Width(hint)
 	if room := m.w - hintW - 2; room >= 24 {
 		if lipgloss.Width(left) > room {

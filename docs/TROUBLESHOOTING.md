@@ -25,7 +25,9 @@ Messages database, history paging, contacts, and the live watch.
 | `tapbacks can only go on the latest message …` | Messages' shortcut only reacts to the newest message | Use your phone for older messages. |
 | `… is not on the Mac (not downloaded from iCloud, or pruned)` | The attachment file is missing on the Mac | Open the conversation in Messages on the Mac once so it downloads. |
 | `(.xyz files are not opened automatically)` | The file type is not on the safe list | It was saved to `~/Downloads`; open it yourself if you trust it. |
-| `attach: … over the 100 MB limit` | File too large | Send a smaller file or a link. |
+| `attach: … over the 100 MB limit` | File too large (not a video) | Send a smaller file or a link. Videos are compressed automatically when `ffmpeg` is installed. |
+| `compressing <video>… N%` | A video over the limit is being shrunk to fit | Wait for "attached", then press enter. `ctrl+x` cancels. |
+| `… cannot fit in … at watchable quality; trim it first` | The clip is too long for the limit even when compressed | Trim it, or send a link. |
 | `open a chat first, then drop or paste the file` | Dropped a file with no chat open | Open the chat, then drop again. |
 | `ctrl+v needs wl-paste (wl-clipboard)` | No Wayland clipboard tool | install `wl-clipboard` (Wayland) or `xclip` (X11). |
 | `beginning of conversation` | No older history | |
