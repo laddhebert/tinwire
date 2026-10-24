@@ -203,6 +203,16 @@ func (a *API) Typing(chatID int64, on bool) error {
 	return a.call(a.Timeout, "typing", map[string]any{"chat_id": chatID, "typing": on}, nil)
 }
 
+// SendStatus reports the delivery state of an outgoing message:
+// "pending", "sent", "delivered" or "failed".
+func (a *API) SendStatus(guid string) (string, error) {
+	var r struct {
+		State string `json:"send_state"`
+	}
+	err := a.call(a.Timeout, "message.send_status", map[string]any{"guid": guid}, &r)
+	return r.State, err
+}
+
 // Read marks a chat read in Messages (which sends read receipts if they are
 // enabled in Messages' settings). Best-effort on macOS 26.
 func (a *API) Read(chatID int64) error {

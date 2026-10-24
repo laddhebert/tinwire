@@ -125,9 +125,15 @@ type Model struct {
 	compressSeq   int
 	compressPct   int
 	sendWhenReady bool // enter was pressed during compression: send once attached
-	sends         int
-	sending       bool
-	laneBlocked   bool
+
+	pending         []pendingSend // sends not yet recorded by Messages (pending.go)
+	pendingSeq      int
+	delivery        map[string]deliveryState // delivery state of messages sent this session, by GUID
+	deliveryTicking bool
+	pendingTicking  bool
+	sends           int
+	sending         bool
+	laneBlocked     bool
 
 	typingOn  bool
 	typingFor int64
@@ -228,6 +234,7 @@ type sentMsg struct {
 	chatID int64
 	to     string
 	text   string
+	pid    int      // placeholder shown while the send is in flight
 	unsent []string // files not sent (restored to the compose box on a safe failure)
 	files  []string // every file this send tried
 	sent   int      // files that did go out before an error
@@ -526,8 +533,24 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := m.handleNote(msg.n)
 		return m, tea.Batch(cmd, waitNote(m.api, m.gen))
 
+	case deliveryTickMsg:
+		return m, m.pollDelivery()
+
+	case deliveryMsg:
+		return m, m.applyDelivery(msg)
+
+	case pendingTickMsg:
+		m.pendingTicking = false
+		if len(m.pending) > 0 {
+			m.refreshVP(false)
+			return m, m.schedulePendingTick()
+		}
+		return m, nil
+
 	case sentMsg:
 		m.sending = false
+		m.finishPending(msg.pid, msg.err)
+		m.refreshVP(false)
 		if msg.err != nil {
 			switch imsg.Code(msg.err) {
 			case imsg.CodeDeliveryUnknown:
@@ -551,11 +574,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.setStatus(fmt.Sprintf("sent (%d this session)", m.sends), false)
 		m.cleanupOutgoing(msg.files) // compressed copies are no longer needed
+		trackCmd := m.track(msg.res.GUID)
+		m.refreshVP(false)
 		if msg.to != "" {
 			m.pendingOpen = msg.to
-			return m, m.loadChats()
+			return m, tea.Batch(trackCmd, m.loadChats())
 		}
-		return m, nil
+		return m, trackCmd
 
 	case typingTickMsg:
 		if msg.seq != m.typingSeq || !m.typingOn {
@@ -1072,8 +1097,11 @@ func (m *Model) send() tea.Cmd {
 	m.layout()
 	m.setStatus("sending "+what+" to "+target+"…", false)
 	api, mac, chatID, to := m.api, m.cfg.Mac, m.open, m.openTo
-	return func() tea.Msg {
-		out := sentMsg{chatID: chatID, to: to, text: text, files: files}
+	pid := m.addPending(chatID, to, text, files)
+	m.refreshVP(true)
+	tick := m.schedulePendingTick()
+	return tea.Batch(tick, func() tea.Msg {
+		out := sentMsg{chatID: chatID, to: to, text: text, files: files, pid: pid}
 		send := func(text, remoteFile string) (imsg.SendResult, error) {
 			if chatID != 0 {
 				return api.SendChat(chatID, text, remoteFile)
@@ -1119,7 +1147,7 @@ func (m *Model) send() tea.Cmd {
 			out.res, out.err = send(text, "")
 		}
 		return out
-	}
+	})
 }
 
 // openAttachments downloads every attachment of msg into the cache. With
@@ -1369,6 +1397,10 @@ func (m *Model) applyIncoming(msg imsg.Message) tea.Cmd {
 		m.chats = append(m.chats[:idx], m.chats[idx+1:]...)
 		m.chats = append([]imsg.Chat{c}, m.chats...)
 		m.keepSel(selID)
+	}
+	if msg.Type == "" && msg.IsFromMe {
+		m.claimPending(msg.ChatID) // the real message replaces its placeholder
+		cmds = append(cmds, m.track(msg.GUID))
 	}
 	if msg.Type == "" && !msg.IsFromMe {
 		cmds = append(cmds, m.notify(msg))

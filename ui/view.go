@@ -258,6 +258,9 @@ func (m Model) renderHeader(w int) string {
 func (m Model) renderConversation(w int) (string, []int) {
 	if m.open == 0 {
 		if m.openTo != "" {
+			if p := m.renderPending(w); len(p) > 0 {
+				return strings.Join(p, "\n"), nil
+			}
 			return dim.Render("New conversation. Type a message (ctrl+a to attach a file) and press enter to send it to " + m.openTo + "."), nil
 		}
 		return dim.Render(strings.Join([]string{
@@ -314,7 +317,10 @@ func (m Model) renderConversation(w int) (string, []int) {
 		b.WriteString(strings.Join(rows, "\n") + "\n")
 		line += len(rows)
 	}
-	if len(list) == 0 {
+	for _, l := range m.renderPending(w) {
+		b.WriteString(l + "\n")
+	}
+	if len(list) == 0 && len(m.pending) == 0 {
 		return dim.Render("no messages"), nil
 	}
 	return strings.TrimRight(b.String(), "\n"), starts
@@ -384,6 +390,11 @@ func (m Model) renderMessage(msg imsg.Message, c imsg.Chat, w int) string {
 		}
 		if len(parts) == 0 {
 			parts = append(parts, dim.Render("(no text)"))
+		}
+	}
+	if msg.IsFromMe {
+		if mark := m.deliveryMark(msg); mark != "" && len(parts) > 0 {
+			parts[len(parts)-1] += "  " + mark
 		}
 	}
 	body := lipgloss.NewStyle().Width(bodyW).Render(strings.Join(parts, "\n"))

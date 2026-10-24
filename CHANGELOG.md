@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- A send appears in the conversation immediately as "⏳ sending… Ns" and is replaced by the real
+  message once Messages records it; your messages then show "✓ sent", "✓✓ delivered" or
+  "✗ not delivered" (polled every 2 s until final). A failed send stays visible as
+  "✗ not sent: <reason>".
+
 - **Dropping a file, or pasting files/a screenshot with `ctrl+v`, sends it to the open chat right
   away** (with anything typed in the compose box as the caption). Big videos are compressed
   first and then sent. `--no-send-on-drop` restores attach-then-enter; `ctrl+a` still attaches
